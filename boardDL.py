@@ -6,6 +6,8 @@ import requests
 import logging
 import re
 
+# 20190504 starting Git
+
 logging.basicConfig(filename='runtime.log', level=logging.DEBUG, 
 	format='%(asctime)s:%(levelname)s:%(message)s')
 
