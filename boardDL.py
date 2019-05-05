@@ -6,8 +6,6 @@ import requests
 import logging
 import re
 
-# 20190504 starting Git
-
 logging.basicConfig(filename='runtime.log', level=logging.DEBUG, 
 	format='%(asctime)s:%(levelname)s:%(message)s')
 
@@ -72,13 +70,15 @@ for index in range(intPage+2, 500, -1):
 		try:
 			source = requests.get(f'https://www.ptt.cc{artLink}').text
 			soup = BeautifulSoup(source, 'lxml')
-		except Exception as e:
-			logging.exception(f'Something wrong when getting {artLink}. Give up for now. {e}')
-		else:
+
 			artBody = soup.find('div', class_='bbs-screen bbs-content')
 
 			dictAllArt[artLink]['artBody'] = artBody.text
+
 			logging.info(f'article body OK of article {artLink}')
+		except Exception as e:
+			logging.exception(f'Something wrong when getting {artLink}. Give up for now. {e}. artBody is {artBody.prettify()}')
+		else:
 
 			arrBodyLink = []
 
