@@ -9,6 +9,11 @@ import re
 logging.basicConfig(filename='runtime.log', level=logging.DEBUG, 
 	format='%(asctime)s:%(levelname)s:%(message)s')
 
+#====LAST TIME
+with open(f'LASTTIME.txt','r', encoding='utf8') as f:
+	LASTTIME = f.readline() #LASTTIME keeps most recent article time
+	logging.info(LASTTIME)
+
 #====BELOW GET MAX page number====
 source = requests.get('https://www.ptt.cc/bbs/AllTogether/index.html').text
 soup = BeautifulSoup(source, 'lxml')
@@ -22,9 +27,21 @@ maxPage = re.findall('\d+', paging[1]['href'])
 intPage = int(maxPage[0])
 #====ABOVE GET MAX page number====
 
-#====BELOW Get Board index====
-for index in range(intPage+2, 500, -1):
-	
+#=====SOME constants here=====
+# logging.info(f'max page is: {intPage}')
+prevPage = True #==set False when reach LASTTIME
+index = intPage + 1 #==page counter as while loop goes page by page
+reachCnt = 0 #==increases when reaching LASTTIME, set prevPage to False
+thisrunLATEST = LASTTIME #==keeping the most recent article time. write to LASTTIME when this execution finishes
+dictAllArt = {}
+dictAllArt['allArticle'] = {}
+lstofDictVal = []
+# logging.info(f'SET prevPage = TRUE')
+#=====SOME constants here=====
+
+#====BELOW Get Board index with history====
+# for index in range(intPage+2, 500, -1):
+while prevPage:
 	logging.info(f'START getting article list and header info from page {index}')
 
 	try:
@@ -34,8 +51,6 @@ for index in range(intPage+2, 500, -1):
 		logging.exception(f'Something wrong when getting index{index}.html. Give up for now. {e}')
 
 	arrLink = []
-
-	dictAllArt = {}
 
 	for indexArticle in soup.find_all('div', class_='r-ent'):
 		try:
@@ -55,68 +70,109 @@ for index in range(intPage+2, 500, -1):
 			artAuthor = None
 			logging.exception(f'RETRIEVE article header info NOK {e}, indexArticle is {indexArticle.prettify()}')
 
-		arrLink.append(artLink) if artLink and artLink not in ['/bbs/AllTogether/M.1276689157.A.9DD.html','/bbs/AllTogether/M.1277610443.A.944.html','/bbs/AllTogether/M.1554201298.A.FD0.html'] else arrLink
+		if artDate and int(artDate) > int(LASTTIME):
 
-		dictAllArt[artLink] = {'artAuthor':artAuthor,'artTitle':artTitle,'artDate':artDate}
+			arrLink.append(artLink) if artLink and '[公告]' not in artTitle else arrLink
+
+			lstofDictVal.append({'artLink':artLink,'artAuthor':artAuthor,'artTitle':artTitle,'artDate':artDate,'getContent':'N'})
+			prevPage = True
+			thisrunLATEST = artDate if int(artDate) > int(thisrunLATEST) else thisrunLATEST
+
+			logging.info(f'artAuthor:{artAuthor}, artDate: {artDate}, prevPage: {prevPage}, thisrunLATEST: {thisrunLATEST}')
+		
+		elif artDate and int(artDate) < int(LASTTIME) and '[公告]' in artTitle:
+			logging.info(f'This is announcement, pass')
+			prevPage = True
+		
+		elif artDate and int(artDate) < int(LASTTIME):
+			reachCnt = reachCnt+1
+			logging.info(f'else clause reachCnt: {reachCnt}')
+
+	if reachCnt > 0:
+		prevPage = False
 		# print(dictAllArt)
+
 	logging.info(f'FINISH getting article list from page {index}')
-	#====ABOVE Get Board index====
+	logging.info(f'{arrLink} and article count = {len(arrLink)}')
+	index = index - 1
+	sleep(randint(2,6))
 
-	#====BELOW Get Content====
-	# source = requests.get('https://www.ptt.cc//bbs/AllTogether/M.1556385940.A.E80.html').text
-	for artLink in arrLink:
-		logging.info(f'START getting article {artLink} of page {index}')
+#====STOP going further when prevPage is False
+dictAllArt['allArticle'] = lstofDictVal
 
-		try:
-			source = requests.get(f'https://www.ptt.cc{artLink}').text
-			soup = BeautifulSoup(source, 'lxml')
+#====dump all header dictionary to json
+with open(f'result.json','w', encoding='utf8') as f:
+	json.dump(dictAllArt, f, indent=2, ensure_ascii=False)
+#====update LASTTIME with thisrunLATEST
+with open(f'LASTTIME.txt','w', encoding='utf8') as f:
+	f.write(thisrunLATEST)
+#====ABOVE Get Board index with history====
 
-			artBody = soup.find('div', class_='bbs-screen bbs-content')
+with open('result.json') as f:
+	jdata = json.load(f)
+toGet = []
+for art in jdata['allArticle']:
+	# print(art['artLink'],art['getContent'])
+	toGet.append(art['artLink']) if art['getContent'] == 'N' else toGet
+logging.info(f'Number of articles to download is: {len(toGet)}')
+#===========
+#===========
+#===========
 
-			dictAllArt[artLink]['artBody'] = artBody.text
+	# #====BELOW Get Content====
+	# for artLink in arrLink:
+	# 	logging.info(f'START getting article {artLink} of page {index}')
 
-			logging.info(f'article body OK of article {artLink}')
-		except Exception as e:
-			logging.exception(f'Something wrong when getting {artLink}. Give up for now. {e}. artBody is {artBody.prettify()}')
-		else:
+	# 	try:
+	# 		source = requests.get(f'https://www.ptt.cc{artLink}').text
+	# 		soup = BeautifulSoup(source, 'lxml')
 
-			arrBodyLink = []
+	# 		artBody = soup.find('div', class_='bbs-screen bbs-content')
 
-			for artBodyLink in artBody.find_all('a'):
-				# print(artBodyLink['href'])
-				arrBodyLink.append(artBodyLink['href'])
+	# 		dictAllArt[artLink]['artBody'] = artBody.text
 
-			dictAllArt[artLink]['artBodyLink'] = arrBodyLink
-			logging.info(f'article insideURL OK of article {artLink}')
+	# 		logging.info(f'article body OK of article {artLink}')
+	# 	except Exception as e:
+	# 		logging.exception(f'Something wrong when getting {artLink}. Give up for now. {e}. artBody is {artBody.prettify()}')
+	# 	else:
 
-			arrCmt = []
+	# 		arrBodyLink = []
 
-			# for artCmt in artBody.find_all('div', class_='push'):
-			for artCmt in artBody.find_all(lambda tag: tag.name == 'div' and tag.get('class') == ['push']):
-				# print(artCmt.prettify())
-				try:
-					cmtTag = artCmt.find('span', {'class':'push-tag'}).text
-					cmtUID = artCmt.find('span', {'class':'push-userid'}).text
-					cmtContent = artCmt.find('span', {'class':'push-content'}).text
-				except Exception as e:
-					cmtTag = None
-					cmtUID = None
-					cmtContent = None
-					logging.exception(f'RETRIEVE article comment info NOK.{e}. artCmt is {artCmt.prettify()}')
+	# 		for artBodyLink in artBody.find_all('a'):
+	# 			# print(artBodyLink['href'])
+	# 			arrBodyLink.append(artBodyLink['href'])
 
-				arrCmt.append([cmtTag,cmtUID,cmtContent])
+	# 		dictAllArt[artLink]['artBodyLink'] = arrBodyLink
+	# 		logging.info(f'article insideURL OK of article {artLink}')
 
-			dictAllArt[artLink]['artCmt'] = arrCmt
-			logging.info(f'article cmt OK of article {artLink}')
+	# 		arrCmt = []
 
-			# print('*****page breaker*****')
-			logging.info(f'FINISH getting article {artLink} of page {index}')
+	# 		# for artCmt in artBody.find_all('div', class_='push'):
+	# 		for artCmt in artBody.find_all(lambda tag: tag.name == 'div' and tag.get('class') == ['push']):
+	# 			# print(artCmt.prettify())
+	# 			try:
+	# 				cmtTag = artCmt.find('span', {'class':'push-tag'}).text
+	# 				cmtUID = artCmt.find('span', {'class':'push-userid'}).text
+	# 				cmtContent = artCmt.find('span', {'class':'push-content'}).text
+	# 			except Exception as e:
+	# 				cmtTag = None
+	# 				cmtUID = None
+	# 				cmtContent = None
+	# 				logging.exception(f'RETRIEVE article comment info NOK.{e}. artCmt is {artCmt.prettify()}')
 
-			sleep(randint(3,6))
-	#====ABOVE Get Content====
+	# 			arrCmt.append([cmtTag,cmtUID,cmtContent])
 
-	logging.info(f'START dumping content of page {index} into JSON')
-	with open(f'index{index}.json','w', encoding='utf8') as f:
-		json.dump(dictAllArt, f, indent=2, ensure_ascii=False)
+	# 		dictAllArt[artLink]['artCmt'] = arrCmt
+	# 		logging.info(f'article cmt OK of article {artLink}')
 
-	logging.info(f'FINISH dumping content of page {index} into JSON')
+	# 		# print('*****page breaker*****')
+	# 		logging.info(f'FINISH getting article {artLink} of page {index}')
+
+	# 		sleep(randint(3,6))
+	# #====ABOVE Get Content====
+
+	# logging.info(f'START dumping content of page {index} into JSON')
+	# with open(f'index{index}.json','w', encoding='utf8') as f:
+	# 	json.dump(dictAllArt, f, indent=2, ensure_ascii=False)
+
+	# logging.info(f'FINISH dumping content of page {index} into JSON')
