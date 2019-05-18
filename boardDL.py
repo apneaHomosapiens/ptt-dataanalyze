@@ -33,8 +33,6 @@ prevPage = True #==set False when reach LASTTIME
 index = intPage + 1 #==page counter as while loop goes page by page
 reachCnt = 0 #==increases when reaching LASTTIME, set prevPage to False
 thisrunLATEST = LASTTIME #==keeping the most recent article time. write to LASTTIME when this execution finishes
-dictAllArt = {}
-dictAllArt['allArticle'] = {}
 lstofDictVal = []
 # logging.info(f'SET prevPage = TRUE')
 #=====SOME constants here=====
@@ -90,7 +88,6 @@ while prevPage:
 
 	if reachCnt > 0:
 		prevPage = False
-		# print(dictAllArt)
 
 	logging.info(f'FINISH getting article list from page {index}')
 	logging.info(f'{arrLink} and article count = {len(arrLink)}')
@@ -98,81 +95,96 @@ while prevPage:
 	sleep(randint(2,6))
 
 #====STOP going further when prevPage is False
-dictAllArt['allArticle'] = lstofDictVal
 
 #====dump all header dictionary to json
-with open(f'result.json','w', encoding='utf8') as f:
-	json.dump(dictAllArt, f, indent=2, ensure_ascii=False)
+with open(f'runtimeresult.json','w', encoding='utf8') as f:
+	json.dump(dict(items=lstofDictVal), f, ensure_ascii=False)
 #====update LASTTIME with thisrunLATEST
 with open(f'LASTTIME.txt','w', encoding='utf8') as f:
 	f.write(thisrunLATEST)
 #====ABOVE Get Board index with history====
+#====BELOW Get Content====
+with open(f'runtimeresult.json') as f:
+	runtimejson = json.load(f)
 
+for artData in runtimejson['items']:
+	# print(artData['artLink'])
+	logging.info(f'''START getting article {artData['artLink']}''')
+
+	try:
+		source = requests.get(f'''https://www.ptt.cc{artData['artLink']}''').text
+		soup = BeautifulSoup(source, 'lxml')
+
+		artBody = soup.find('div', class_='bbs-screen bbs-content')
+
+		logging.info(f'''article find body OK of article {artData['artLink']}''')
+	except Exception as e:
+		logging.exception(f'''Something wrong when getting {artData['artLink']}. Give up for now. {e}. artBody is {artBody.prettify()}''')
+	else:
+
+		arrBodyLink = []
+
+		for artBodyLink in artBody.find_all('a'):
+			# print(artBodyLink['href'])
+			arrBodyLink.append(artBodyLink['href'])
+
+		logging.info(f'''article insideURL OK of article {artData['artLink']}''')
+
+		arrCmt = []
+
+		for artCmt in artBody.find_all(lambda tag: tag.name == 'div' and tag.get('class') == ['push']):
+			# print(artCmt.prettify())
+			try:
+				cmtTag = artCmt.find('span', {'class':'push-tag'}).text
+				cmtUID = artCmt.find('span', {'class':'push-userid'}).text
+				cmtContent = artCmt.find('span', {'class':'push-content'}).text
+			except Exception as e:
+				cmtTag = None
+				cmtUID = None
+				cmtContent = None
+				logging.exception(f'RETRIEVE article comment info NOK.{e}. artCmt is {artCmt.prettify()}')
+
+			arrCmt.append([cmtTag,cmtUID,cmtContent])
+
+		bodyData = {
+			'artBody': artBody.text,
+			'artBodyLink': arrBodyLink,
+			'artCmt': arrCmt
+		}
+		logging.info(f'''article cmt OK of article {artData['artLink']}''')
+		artData.update(bodyData)
+		# print('*****page breaker*****')
+		logging.info(f'''FINISH getting article {artData['artLink']}''')
+
+		sleep(randint(3,6))
+#====ABOVE Get Content====
+
+logging.info(f'START dumping runtime content into runtimeresult.json')
+with open(f'runtimeresult.json', 'w', encoding='utf8') as f:
+	json.dump(runtimejson, f, ensure_ascii=False)
+
+logging.info(f'FINISH dumping runtime content into runtimeresult.json')
+
+logging.info(f'START merging runtime with history')
+
+logging.info(f'OPEN history result.json')
 with open('result.json') as f:
-	jdata = json.load(f)
-toGet = []
-for art in jdata['allArticle']:
-	# print(art['artLink'],art['getContent'])
-	toGet.append(art['artLink']) if art['getContent'] == 'N' else toGet
-logging.info(f'Number of articles to download is: {len(toGet)}')
-#===========
-#===========
-#===========
+	history = json.load(f)
+logging.info(f'''history has count: {len(history['items'])}''')
 
-	# #====BELOW Get Content====
-	# for artLink in arrLink:
-	# 	logging.info(f'START getting article {artLink} of page {index}')
+logging.info(f'OPEN runtime runtimeresult.json')
+with open('runtimeresult.json') as f:
+	runtime = json.load(f)
+logging.info(f'''runtime has count: {len(runtime['items'])}''')
 
-	# 	try:
-	# 		source = requests.get(f'https://www.ptt.cc{artLink}').text
-	# 		soup = BeautifulSoup(source, 'lxml')
+logging.info(f'APPEND new runtime into history')
+for new in runtime['items']:
+	# logging.info(new)
+	history['items'].append(new)
 
-	# 		artBody = soup.find('div', class_='bbs-screen bbs-content')
+logging.info(f'''after append history has count: {len(history['items'])}''')
 
-	# 		dictAllArt[artLink]['artBody'] = artBody.text
-
-	# 		logging.info(f'article body OK of article {artLink}')
-	# 	except Exception as e:
-	# 		logging.exception(f'Something wrong when getting {artLink}. Give up for now. {e}. artBody is {artBody.prettify()}')
-	# 	else:
-
-	# 		arrBodyLink = []
-
-	# 		for artBodyLink in artBody.find_all('a'):
-	# 			# print(artBodyLink['href'])
-	# 			arrBodyLink.append(artBodyLink['href'])
-
-	# 		dictAllArt[artLink]['artBodyLink'] = arrBodyLink
-	# 		logging.info(f'article insideURL OK of article {artLink}')
-
-	# 		arrCmt = []
-
-	# 		# for artCmt in artBody.find_all('div', class_='push'):
-	# 		for artCmt in artBody.find_all(lambda tag: tag.name == 'div' and tag.get('class') == ['push']):
-	# 			# print(artCmt.prettify())
-	# 			try:
-	# 				cmtTag = artCmt.find('span', {'class':'push-tag'}).text
-	# 				cmtUID = artCmt.find('span', {'class':'push-userid'}).text
-	# 				cmtContent = artCmt.find('span', {'class':'push-content'}).text
-	# 			except Exception as e:
-	# 				cmtTag = None
-	# 				cmtUID = None
-	# 				cmtContent = None
-	# 				logging.exception(f'RETRIEVE article comment info NOK.{e}. artCmt is {artCmt.prettify()}')
-
-	# 			arrCmt.append([cmtTag,cmtUID,cmtContent])
-
-	# 		dictAllArt[artLink]['artCmt'] = arrCmt
-	# 		logging.info(f'article cmt OK of article {artLink}')
-
-	# 		# print('*****page breaker*****')
-	# 		logging.info(f'FINISH getting article {artLink} of page {index}')
-
-	# 		sleep(randint(3,6))
-	# #====ABOVE Get Content====
-
-	# logging.info(f'START dumping content of page {index} into JSON')
-	# with open(f'index{index}.json','w', encoding='utf8') as f:
-	# 	json.dump(dictAllArt, f, indent=2, ensure_ascii=False)
-
-	# logging.info(f'FINISH dumping content of page {index} into JSON')
+logging.info(f'START dumping new content into result.json')
+with open('result.json', 'w', encoding='utf8') as f:
+	json.dump(history, f, ensure_ascii=False)
+logging.info(f'FINISH dumping new content into result.json')
