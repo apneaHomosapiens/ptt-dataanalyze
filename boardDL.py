@@ -92,7 +92,7 @@ while prevPage:
 	logging.info(f'FINISH getting article list from page {index}')
 	logging.info(f'{arrLink} and article count = {len(arrLink)}')
 	index = index - 1
-	sleep(randint(2,6))
+	sleep(randint(1,4))
 
 #====STOP going further when prevPage is False
 
@@ -114,13 +114,27 @@ for artData in runtimejson['items']:
 	try:
 		source = requests.get(f'''https://www.ptt.cc{artData['artLink']}''').text
 		soup = BeautifulSoup(source, 'lxml')
-
 		artBody = soup.find('div', class_='bbs-screen bbs-content')
 
-		logging.info(f'''article find body OK of article {artData['artLink']}''')
 	except Exception as e:
 		logging.exception(f'''Something wrong when getting {artData['artLink']}. Give up for now. {e}. artBody is {artBody.prettify()}''')
 	else:
+		#===ugly solution to work around http 5xx response, retry
+		if artBody is None:
+			logging.debug(f'http returns other than 200. lets retry')
+			for i in range(3,0,-1):
+				if artBody is not None:
+					logging.info(f'retried {i-1} then good to continue')
+					break
+				else:
+					logging.info(f'retry number {i}')
+					sleep(10)
+					source = requests.get(f'''https://www.ptt.cc{artData['artLink']}''').text
+					soup = BeautifulSoup(source, 'lxml')
+					artBody = soup.find('div', class_='bbs-screen bbs-content')
+		#===ugly solution to work around http 5xx response, retry
+
+		logging.info(f'''article find body OK of article {artData['artLink']}''')
 
 		arrBodyLink = []
 
@@ -156,7 +170,7 @@ for artData in runtimejson['items']:
 		# print('*****page breaker*****')
 		logging.info(f'''FINISH getting article {artData['artLink']}''')
 
-		sleep(randint(3,6))
+		sleep(randint(1,4))
 #====ABOVE Get Content====
 
 logging.info(f'START dumping runtime content into runtimeresult.json')
