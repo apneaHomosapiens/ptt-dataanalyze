@@ -18,8 +18,11 @@ The reason to keep a bookmark is because I want to continuously get new articles
 
 All articles of each board is stored in its json file for later use.
 
+# Something kind of important
+To run this you need python3.6, BeautifulSoup4 and urllib. Some others are default python module.
+
 # How does the json look like?
 [to do]
 
-# What do you do with these data?
+# What can you do with these data?
 [to do]
